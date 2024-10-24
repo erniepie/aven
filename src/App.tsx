@@ -157,6 +157,7 @@ function App() {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       submitMessage(inputMessage);
+      setInputMessage("");
     }
   }
 
@@ -169,15 +170,19 @@ function App() {
       <ClaudeAPIKey />
 
       <div className="flex flex-col flex-1 space-y-4 w-full max-w-2xl mx-auto">
-        <div className="flex-1 overflow-y-auto space-y-2 p-4 bg-white rounded shadow">
+        <div className="flex-1 overflow-y-auto space-y-2 p-4 bg-white rounded shadow flex flex-col">
           {messages.map((message, index) => (
             <div
               key={index}
-              className={`p-2 rounded whitespace-pre-wrap ${
-                message.role === "assistant"
-                  ? "bg-blue-100 self-start"
-                  : "bg-gray-200 self-end"
+              className={`py-2 px-4 rounded-lg whitespace-pre-wrap ${
+                message.role === "assistant" ? "bg-blue-100" : "bg-gray-200"
               }`}
+              style={{
+                alignSelf:
+                  message.role === "assistant" ? "flex-start" : "flex-end",
+                textAlign: message.role === "assistant" ? "left" : "right",
+                maxWidth: "70%",
+              }}
             >
               <span className="font-semibold">{message.role}:</span>{" "}
               {message.content}
