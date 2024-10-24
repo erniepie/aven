@@ -4,14 +4,18 @@ import { Message } from "ai/react";
 import { fetch } from "@tauri-apps/plugin-http";
 
 import "./App.css";
-import { saveClaudeToken, getClaudeToken } from "./store";
-import { FaEdit } from "react-icons/fa";
+import {
+  saveClaudeToken,
+  getClaudeToken,
+  getMessages,
+  saveMessages,
+} from "./store";
+import { FaEdit, FaTrash } from "react-icons/fa";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { convertToCoreMessages, generateId, streamText } from "ai";
 import { anthropicTools } from "./lib/anthropic-tools";
 import { getMonitors } from "./computer";
 import { Button } from "./components/ui/button";
-import { Input } from "./components/ui/input";
 import { Textarea } from "./components/ui/textarea";
 
 function ClaudeAPIKey() {
@@ -89,6 +93,7 @@ function App() {
 
   useEffect(() => {
     getMonitors().then(setMonitors);
+    getMessages().then(setMessages);
   }, []);
 
   async function submitMessage(message: string) {
@@ -163,6 +168,14 @@ function App() {
     }
   }
 
+  function clearMessages() {
+    setMessages([]);
+  }
+
+  useEffect(() => {
+    saveMessages(messages);
+  }, [messages]);
+
   return (
     <main className="min-h-screen flex flex-col p-8 bg-gray-50">
       <header className="w-full text-center mb-4">
@@ -171,25 +184,37 @@ function App() {
 
       <ClaudeAPIKey />
 
-      <div className="flex flex-col flex-1 space-y-4 w-full max-w-2xl mx-auto">
-        <div className="flex-1 overflow-y-auto space-y-2 p-4 bg-white rounded shadow flex flex-col">
-          {messages.map((message, index) => (
-            <div
-              key={index}
-              className={`py-2 px-4 rounded-lg whitespace-pre-wrap ${
-                message.role === "assistant" ? "bg-blue-100" : "bg-gray-200"
-              }`}
-              style={{
-                alignSelf:
-                  message.role === "assistant" ? "flex-start" : "flex-end",
-                textAlign: message.role === "assistant" ? "left" : "right",
-                maxWidth: "70%",
-              }}
+      <div className="flex flex-col flex-1 gap-4 w-full max-w-2xl mx-auto">
+        <div className="flex flex-col gap-2 flex-1">
+          <div className="flex justify-end">
+            <Button
+              onClick={clearMessages}
+              variant="ghost"
+              className="flex items-center gap-2"
             >
-              <span className="font-semibold">{message.role}:</span>{" "}
-              {message.content}
-            </div>
-          ))}
+              <FaTrash />
+              Clear
+            </Button>
+          </div>
+          <div className="flex-1 overflow-y-auto space-y-2 p-4 bg-white rounded shadow flex flex-col">
+            {messages.map((message, index) => (
+              <div
+                key={index}
+                className={`py-2 px-4 rounded-lg whitespace-pre-wrap ${
+                  message.role === "assistant" ? "bg-blue-100" : "bg-gray-200"
+                }`}
+                style={{
+                  alignSelf:
+                    message.role === "assistant" ? "flex-start" : "flex-end",
+                  textAlign: message.role === "assistant" ? "left" : "right",
+                  maxWidth: "70%",
+                }}
+              >
+                <span className="font-semibold">{message.role}:</span>{" "}
+                {message.content}
+              </div>
+            ))}
+          </div>
         </div>
         <div className="flex gap-2">
           <Textarea
