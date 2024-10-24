@@ -1,12 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
 use enigo::{Coordinate, Enigo, Mouse, Settings};
-use image::ImageFormat;
 use tauri::Manager;
-// use image::ImageFormat;
-// use tauri_plugin_fs::FsExt;
-use std::fs::File;
-use std::io::BufWriter;
 use xcap::Monitor;
 
 #[derive(serde::Serialize)]
@@ -56,14 +51,10 @@ fn take_screenshot(app_handle: tauri::AppHandle) -> Result<String, String> {
 
     // Save screenshot directly to file without intermediate PNG bytes
     let now = std::time::Instant::now();
-    let file = File::create(&path).map_err(|e| e.to_string())?;
-    let mut writer = BufWriter::new(file);
-    screenshot
-        .write_to(&mut writer, ImageFormat::Png)
-        .map_err(|e| e.to_string())?;
+    screenshot.save(&path).map_err(|e| e.to_string())?;
     println!("-- Save: {:?}", now.elapsed());
 
-    Ok(path.to_str().unwrap().to_string())
+    Ok(String::from("./screenshots/screenshot.png"))
 }
 
 #[tauri::command]
