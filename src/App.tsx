@@ -69,7 +69,7 @@ function ClaudeAPIKey() {
               className="px-2 py-1 border rounded cursor-pointer text-sm"
             >
               {claudeToken
-                ? `sk-${claudeToken.slice(0, 4)}...`
+                ? `${claudeToken.slice(0, 4)}...`
                 : "Click to enter API Key"}
             </span>
             <FaEdit
@@ -158,6 +158,11 @@ function App() {
         { role: "assistant", content: text, id: messageId },
       ]);
     }
+
+    setMessages((prevMessages) => {
+      saveMessages(prevMessages);
+      return prevMessages;
+    });
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -168,13 +173,10 @@ function App() {
     }
   }
 
-  function clearMessages() {
+  async function clearMessages() {
+    await saveMessages([]);
     setMessages([]);
   }
-
-  useEffect(() => {
-    saveMessages(messages);
-  }, [messages]);
 
   return (
     <main className="min-h-screen flex flex-col p-8 bg-gray-50">
