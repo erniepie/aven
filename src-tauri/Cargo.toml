@@ -28,4 +28,5 @@ image = "0.25.4"
 base64 = "0.22.1"
 tauri-plugin-store = "2"
 tauri-plugin-fs = "2"
+tauri-plugin-http = "2"
 
