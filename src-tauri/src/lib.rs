@@ -8,6 +8,8 @@ use xcap::Monitor;
 struct MonitorData {
     id: String,
     is_primary: bool,
+    width: u32,
+    height: u32,
 }
 
 #[tauri::command]
@@ -19,6 +21,8 @@ fn get_monitors() -> Result<Vec<MonitorData>, String> {
         .map(|m| MonitorData {
             id: m.id().to_string(),
             is_primary: m.is_primary(),
+            width: m.width(),
+            height: m.height(),
         })
         .collect())
 }

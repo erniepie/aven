@@ -81,7 +81,7 @@ function ClaudeAPIKey() {
 
 function App() {
   const [monitors, setMonitors] = useState<
-    Array<{ id: string; is_primary: boolean }>
+    Array<{ id: string; is_primary: boolean; width: number; height: number }>
   >([]);
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -109,9 +109,11 @@ function App() {
       fetch,
     });
 
+    const primaryMonitor = monitors.find((m) => m.is_primary);
+
     const computerTool = anthropicTools.computer_20241022({
-      displayWidthPx: 1920,
-      displayHeightPx: 1080,
+      displayWidthPx: primaryMonitor?.width ?? 1920,
+      displayHeightPx: primaryMonitor?.height ?? 1080,
       displayNumber: 0, // Optional, for X11 environments
       execute: async ({ action, coordinate, text }) => {
         // Implement your computer control logic here

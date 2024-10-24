@@ -2,11 +2,11 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
 
 export async function getMonitors(): Promise<
-  Array<{ id: string; is_primary: boolean }>
+  Array<{ id: string; is_primary: boolean; width: number; height: number }>
 > {
-  const result = await invoke<Array<{ id: string; is_primary: boolean }>>(
-    "get_monitors"
-  );
+  const result = await invoke<
+    Array<{ id: string; is_primary: boolean; width: number; height: number }>
+  >("get_monitors");
 
   return result;
 }
