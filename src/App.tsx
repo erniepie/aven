@@ -151,18 +151,25 @@ function App() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-8 bg-gray-50">
-      <h1 className="text-4xl font-bold mb-8 text-gray-800 text-center">
-        Welcome to Aven
-      </h1>
+    <main className="min-h-screen flex flex-col p-8 bg-gray-50">
+      <header className="w-full text-center mb-4">
+        <h1 className="text-4xl font-bold text-gray-800">Welcome to Aven</h1>
+      </header>
 
       <ClaudeAPIKey />
 
-      <div className="space-y-4">
-        <div className="space-y-2">
+      <div className="flex flex-col flex-1 space-y-4 w-full max-w-2xl mx-auto">
+        <div className="flex-1 overflow-y-auto space-y-2 p-4 bg-white rounded shadow">
           {messages.map((message, index) => (
-            <div key={index} className="p-2 bg-gray-200 rounded">
-              <span className="font-semibold">{message.role}:</span>
+            <div
+              key={index}
+              className={`p-2 rounded ${
+                message.role === "assistant"
+                  ? "bg-blue-100 self-start"
+                  : "bg-gray-200 self-end"
+              }`}
+            >
+              <span className="font-semibold">{message.role}:</span>{" "}
               {message.content}
             </div>
           ))}
