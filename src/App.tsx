@@ -12,6 +12,7 @@ import { anthropicTools } from "./lib/anthropic-tools";
 import { getMonitors } from "./computer";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
+import { Textarea } from "./components/ui/textarea";
 
 function ClaudeAPIKey() {
   const [claudeToken, setClaudeToken] = useState<string>("");
@@ -143,6 +144,12 @@ function App() {
     }
   }
 
+  function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter") {
+      submitMessage(inputMessage);
+    }
+  }
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8 bg-gray-50">
       <h1 className="text-4xl font-bold mb-8 text-gray-800 text-center">
@@ -161,12 +168,12 @@ function App() {
           ))}
         </div>
         <div className="flex gap-2">
-          <Input
-            type="text"
+          <Textarea
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             placeholder="Type your message"
             className="flex-1"
+            onKeyDown={handleKeyDown}
           />
           <Button onClick={() => submitMessage(inputMessage)}>Send</Button>
         </div>
