@@ -1,51 +1,25 @@
 import { useState, useEffect } from "react";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { Message } from "ai/react";
+
+import { fetch } from "@tauri-apps/plugin-http";
 
 import "./App.css";
-import { appDataDir, join } from "@tauri-apps/api/path";
-import { saveClaudeToken, getClaudeToken, deleteClaudeToken } from "./store";
+import { saveClaudeToken, getClaudeToken } from "./store";
+import { FaEdit } from "react-icons/fa";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { convertToCoreMessages, generateId, streamText } from "ai";
+import { anthropicTools } from "./lib/anthropic-tools";
+import { getMonitors } from "./computer";
+import { Button } from "./components/ui/button";
+import { Input } from "./components/ui/input";
 
-function App() {
-  const [monitors, setMonitors] = useState<
-    Array<{ id: string; is_primary: boolean }>
-  >([]);
-  const [screenshot, setScreenshot] = useState<string>("");
-  const [mouseX, setMouseX] = useState<number>(0);
-  const [mouseY, setMouseY] = useState<number>(0);
+function ClaudeAPIKey() {
   const [claudeToken, setClaudeToken] = useState<string>("");
   const [isEditingToken, setIsEditingToken] = useState<boolean>(false);
 
   useEffect(() => {
     handleLoadClaudeToken();
-    getMonitors();
   }, []);
-
-  async function getMonitors() {
-    const result = await invoke<Array<{ id: string; is_primary: boolean }>>(
-      "get_monitors"
-    );
-    setMonitors(result);
-  }
-
-  async function takeScreenshot() {
-    console.time("take_screenshot");
-    const filePath = await invoke<string>("take_screenshot");
-    console.timeEnd("take_screenshot");
-
-    const appDataDirPath = await appDataDir();
-    const absoluteFilePath = await join(appDataDirPath, filePath);
-    const assetUrl = convertFileSrc(absoluteFilePath);
-
-    setScreenshot(assetUrl);
-  }
-
-  function clearScreenshot() {
-    setScreenshot("");
-  }
-
-  async function handleMoveMouse() {
-    await invoke("move_mouse", { x: mouseX, y: mouseY });
-  }
 
   async function handleSaveClaudeToken() {
     await saveClaudeToken(claudeToken);
@@ -62,118 +36,140 @@ function App() {
     }
   }
 
-  async function handleClearClaudeToken() {
-    await deleteClaudeToken();
-    setClaudeToken("");
-    alert("Claude API Key deleted!");
+  function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      handleSaveClaudeToken();
+    }
+  }
+
+  return (
+    <div className="absolute top-2 right-2 p-2 bg-white rounded shadow">
+      <div className="flex gap-2 items-center">
+        <h2 className="text-sm font-semibold">Claude API Key:</h2>
+        {isEditingToken ? (
+          <input
+            type="text"
+            value={claudeToken}
+            onChange={(e) => setClaudeToken(e.target.value)}
+            placeholder="Enter Claude API Key"
+            className="px-2 py-1 border rounded text-sm hover:border-gray-300 transition-colors focus:outline-blue-500"
+            autoFocus
+            onBlur={handleSaveClaudeToken}
+            onKeyDown={handleKeyDown}
+          />
+        ) : (
+          <span className="flex items-center gap-2">
+            <span
+              onClick={() => setIsEditingToken(true)}
+              className="px-2 py-1 border rounded cursor-pointer text-sm"
+            >
+              {claudeToken
+                ? `sk-${claudeToken.slice(0, 4)}...`
+                : "Click to enter API Key"}
+            </span>
+            <FaEdit
+              onClick={() => setIsEditingToken(true)}
+              className="text-blue-500 cursor-pointer hover:text-blue-600 transition-colors text-sm"
+            />
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [monitors, setMonitors] = useState<
+    Array<{ id: string; is_primary: boolean }>
+  >([]);
+
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputMessage, setInputMessage] = useState<string>("");
+
+  useEffect(() => {
+    getMonitors().then(setMonitors);
+  }, []);
+
+  async function submitMessage(message: string) {
+    setMessages((prevMessages) => [
+      ...prevMessages,
+      { role: "user", content: message, id: generateId() },
+    ]);
+
+    const claudeAPIKey = await getClaudeToken();
+
+    const anthropic = createAnthropic({
+      apiKey: claudeAPIKey,
+      fetch,
+    });
+
+    const computerTool = anthropicTools.computer_20241022({
+      displayWidthPx: 1920,
+      displayHeightPx: 1080,
+      displayNumber: 0, // Optional, for X11 environments
+      execute: async ({ action, coordinate, text }) => {
+        // Implement your computer control logic here
+        // Return the result of the action
+        console.log(action, coordinate, text);
+      },
+    });
+
+    const { textStream } = await streamText({
+      model: anthropic("claude-3-5-sonnet-20241022"),
+      messages: [
+        {
+          role: "system",
+          content: "You are a helpful assistant that can control the computer.",
+        },
+        ...convertToCoreMessages(messages),
+      ],
+      tools: {
+        computer: computerTool,
+      },
+    });
+
+    let text = "";
+
+    for await (const textPart of textStream) {
+      text += textPart;
+
+      // update the last message
+      setMessages((prevMessages) => [
+        ...prevMessages.slice(0, -1),
+        { role: "assistant", content: text, id: generateId() },
+      ]);
+
+      console.log("textPart", textPart);
+    }
   }
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8 bg-gray-50">
-      <h1 className="text-4xl font-bold mb-8 text-gray-800">Welcome to Aven</h1>
+      <h1 className="text-4xl font-bold mb-8 text-gray-800 text-center">
+        Welcome to Aven
+      </h1>
 
-      <div className="absolute top-4 right-4 p-4 bg-white rounded-lg shadow">
-        <h2 className="text-xl font-semibold mb-2">Claude API Key:</h2>
-        <div className="flex gap-4 items-center">
-          {isEditingToken ? (
-            <input
-              type="text"
-              value={claudeToken}
-              onChange={(e) => setClaudeToken(e.target.value)}
-              placeholder="Enter Claude API Key"
-              className="px-3 py-2 border rounded"
-              autoFocus
-            />
-          ) : (
-            <span
-              onClick={() => setIsEditingToken(true)}
-              className="px-3 py-2 border rounded cursor-pointer"
-            >
-              {claudeToken ? "********" : "Click to enter API Key"}
-            </span>
-          )}
-          {isEditingToken && (
-            <button
-              onClick={handleSaveClaudeToken}
-              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-            >
-              Save
-            </button>
-          )}
-          <button
-            onClick={handleClearClaudeToken}
-            className="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-          >
-            Clear
-          </button>
-        </div>
-      </div>
-
-      <div className="flex gap-4 mb-6">
-        <button
-          onClick={takeScreenshot}
-          className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-        >
-          Take Screenshot
-        </button>
-      </div>
+      <ClaudeAPIKey />
 
       <div className="space-y-4">
-        <div className="p-4 bg-white rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-2">Mouse Control:</h2>
-          <div className="flex gap-4 items-center">
-            <input
-              type="number"
-              value={mouseX}
-              onChange={(e) => setMouseX(parseInt(e.target.value))}
-              placeholder="X coordinate"
-              className="px-3 py-2 border rounded"
-            />
-            <input
-              type="number"
-              value={mouseY}
-              onChange={(e) => setMouseY(parseInt(e.target.value))}
-              placeholder="Y coordinate"
-              className="px-3 py-2 border rounded"
-            />
-            <button
-              onClick={handleMoveMouse}
-              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-            >
-              Move Mouse
-            </button>
-          </div>
+        <div className="space-y-2">
+          {messages.map((message, index) => (
+            <div key={index} className="p-2 bg-gray-200 rounded">
+              <span className="font-semibold">{message.role}:</span>
+              {message.content}
+            </div>
+          ))}
         </div>
-
-        {monitors.length > 0 && (
-          <div className="p-4 bg-white rounded-lg shadow">
-            <h2 className="text-xl font-semibold mb-2">Monitors:</h2>
-            <ul className="list-disc pl-5">
-              {monitors.map((monitor) => (
-                <li key={monitor.id}>
-                  ID: {monitor.id} {monitor.is_primary && "(Primary)"}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {screenshot && (
-          <div className="p-4 bg-white rounded-lg shadow">
-            <h2 className="text-xl font-semibold mb-2">Screenshot:</h2>
-            <img
-              src={screenshot}
-              alt="Screenshot"
-              className="max-w-full rounded"
-            />
-            <button
-              onClick={clearScreenshot}
-              className="mt-4 px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-            >
-              Clear Screenshot
-            </button>
-          </div>
-        )}
+        <div className="flex gap-2">
+          <Input
+            type="text"
+            value={inputMessage}
+            onChange={(e) => setInputMessage(e.target.value)}
+            placeholder="Type your message"
+            className="flex-1"
+          />
+          <Button onClick={() => submitMessage(inputMessage)}>Send</Button>
+        </div>
       </div>
     </main>
   );
