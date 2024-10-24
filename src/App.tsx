@@ -92,15 +92,20 @@ function App() {
   }, []);
 
   async function submitMessage(message: string) {
-    setMessages((prevMessages) => [
-      ...prevMessages,
+    const newMessages = [
+      ...messages,
       { role: "user", content: message, id: generateId() },
-    ]);
+    ] satisfies Message[];
+
+    setMessages(newMessages);
 
     const claudeAPIKey = await getClaudeToken();
 
     const anthropic = createAnthropic({
       apiKey: claudeAPIKey,
+      headers: {
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
       fetch,
     });
 
@@ -117,19 +122,25 @@ function App() {
 
     const { textStream } = await streamText({
       model: anthropic("claude-3-5-sonnet-20241022"),
-      messages: [
+      messages: convertToCoreMessages([
         {
-          role: "system",
+          role: "user",
           content: "You are a helpful assistant that can control the computer.",
         },
-        ...convertToCoreMessages(messages),
-      ],
+        ...newMessages,
+      ]),
       tools: {
         computer: computerTool,
       },
     });
 
     let text = "";
+    const messageId = generateId();
+
+    setMessages((prevMessages) => [
+      ...prevMessages,
+      { role: "assistant", content: text, id: messageId },
+    ]);
 
     for await (const textPart of textStream) {
       text += textPart;
@@ -137,15 +148,14 @@ function App() {
       // update the last message
       setMessages((prevMessages) => [
         ...prevMessages.slice(0, -1),
-        { role: "assistant", content: text, id: generateId() },
+        { role: "assistant", content: text, id: messageId },
       ]);
-
-      console.log("textPart", textPart);
     }
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter") {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
       submitMessage(inputMessage);
     }
   }
@@ -163,7 +173,7 @@ function App() {
           {messages.map((message, index) => (
             <div
               key={index}
-              className={`p-2 rounded ${
+              className={`p-2 rounded whitespace-pre-wrap ${
                 message.role === "assistant"
                   ? "bg-blue-100 self-start"
                   : "bg-gray-200 self-end"
