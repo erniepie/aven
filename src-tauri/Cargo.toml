@@ -30,4 +30,5 @@ tauri-plugin-store = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-http = "2"
 tauri-plugin-os = "2"
+tokio = "1.41.0"
 

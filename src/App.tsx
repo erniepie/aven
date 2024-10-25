@@ -105,6 +105,7 @@ function App() {
   const [monitors, setMonitors] = useState<
     Array<{ id: string; is_primary: boolean; width: number; height: number }>
   >([]);
+  const [isAIWorking, setIsAIWorking] = useState(false);
 
   const {
     messages,
@@ -130,6 +131,7 @@ function App() {
 
   async function submitMessage(message: string) {
     setInputMessage("");
+    setIsAIWorking(true);
 
     const newMessages = [
       ...messages,
@@ -255,7 +257,21 @@ function App() {
           console.log("-- Left click:", { coordinate });
 
           if (coordinate) {
-            await mouseClick("left", coordinate[0], coordinate[1]);
+            const scaledCoordinates = scaleCoordinates({
+              source: ScalingSource.API,
+              screenDimensions: {
+                width: primaryMonitor?.width ?? 1920,
+                height: primaryMonitor?.height ?? 1080,
+              },
+              x: coordinate[0],
+              y: coordinate[1],
+            });
+
+            await mouseClick(
+              "left",
+              scaledCoordinates[0],
+              scaledCoordinates[1]
+            );
           } else {
             await mouseClick("left");
           }
@@ -284,7 +300,7 @@ function App() {
         } else if (action === "screenshot") {
           console.log("-- Screenshot");
 
-          const scaledDimensionsForResize = scaleCoordinates({
+          const scaledDimensions = scaleCoordinates({
             source: ScalingSource.COMPUTER,
             screenDimensions: {
               width: primaryMonitor?.width ?? 1920,
@@ -295,8 +311,8 @@ function App() {
           });
 
           const screenshot = await takeScreenshot({
-            resizeX: scaledDimensionsForResize[0],
-            resizeY: scaledDimensionsForResize[1],
+            resizeX: scaledDimensions[0],
+            resizeY: scaledDimensions[1],
           });
 
           const screenshotBytes = await readFile(screenshot.absoluteFilePath);
@@ -418,6 +434,8 @@ function App() {
       }));
     } catch (error) {
       console.error("Error submitting message", error);
+    } finally {
+      setIsAIWorking(false);
     }
   }
 
@@ -498,18 +516,20 @@ function App() {
                       >
                         <div>💻 Computer</div>
                         <div>
-                          <b>Action:</b> {toolInvocation.args.action}
+                          <b>Action:</b> <br />
+                          {toolInvocation.args.action}
                         </div>
                         {toolInvocation.args.coordinate && (
                           <div>
-                            <b>Coordinate:</b> x:{" "}
-                            {toolInvocation.args.coordinate[0]}, y:{" "}
+                            <b>Coordinate:</b> <br />
+                            x: {toolInvocation.args.coordinate[0]}, y:{" "}
                             {toolInvocation.args.coordinate[1]}
                           </div>
                         )}
                         {toolInvocation.args.text && (
                           <div>
-                            <b>Text:</b> {toolInvocation.args.text}
+                            <b>Text:</b> <br />
+                            {toolInvocation.args.text}
                           </div>
                         )}
                       </div>
@@ -527,8 +547,14 @@ function App() {
             placeholder="Type your message"
             className="flex-1"
             onKeyDown={handleKeyDown}
+            disabled={isAIWorking}
           />
-          <Button onClick={() => submitMessage(inputMessage)}>Send</Button>
+          <Button
+            onClick={() => submitMessage(inputMessage)}
+            disabled={isAIWorking}
+          >
+            {isAIWorking ? "Thinking..." : "Send"}
+          </Button>
         </div>
       </div>
     </main>
