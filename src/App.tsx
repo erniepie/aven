@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 import { fetch } from "@tauri-apps/plugin-http";
 import { BaseDirectory, writeFile, readFile } from "@tauri-apps/plugin-fs";
@@ -8,7 +8,12 @@ import { saveClaudeToken, getClaudeToken } from "./store";
 import { FaEdit, FaTrash } from "react-icons/fa";
 import { Bot } from "lucide-react";
 import { createAnthropic } from "@ai-sdk/anthropic";
-import { convertToCoreMessages, generateId, streamText } from "ai";
+import {
+  convertToCoreMessages,
+  generateId,
+  streamText,
+  ToolInvocation,
+} from "ai";
 import { Message } from "ai/react";
 
 import { anthropicTools } from "./lib/anthropic-tools";
@@ -81,7 +86,7 @@ function ClaudeAPIKey() {
               className="px-2 py-1 border rounded cursor-pointer text-sm"
             >
               {claudeToken
-                ? `${claudeToken.slice(0, 4)}...`
+                ? `${claudeToken.slice(0, 12)}...`
                 : "Click to enter API Key"}
             </span>
             <FaEdit
@@ -100,13 +105,27 @@ function App() {
     Array<{ id: string; is_primary: boolean; width: number; height: number }>
   >([]);
 
-  const { messages, setMessages, addMessage, replaceLastMessage } =
-    useGlobalStore();
+  const {
+    messages,
+    setMessages,
+    addMessage,
+    replaceLastMessage,
+    updateLastMessage,
+  } = useGlobalStore();
   const [inputMessage, setInputMessage] = useState<string>("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   useEffect(() => {
     getMonitors().then(setMonitors);
   }, []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   async function submitMessage(message: string) {
     setInputMessage("");
@@ -142,13 +161,13 @@ function App() {
         ) {
           const deserializedBody = JSON.parse(String(init?.body));
 
-          console.log("deserializedBody");
+          // console.log("deserializedBody");
 
           if (
             deserializedBody.messages &&
             deserializedBody.messages.length > 0
           ) {
-            console.log("deserializedBody.messages");
+            // console.log("deserializedBody.messages");
 
             for (const message of deserializedBody.messages) {
               if (
@@ -156,7 +175,7 @@ function App() {
                 Array.isArray(message.content) &&
                 message.content.length > 0
               ) {
-                console.log("message.content");
+                // console.log("message.content");
 
                 for (const part of message.content) {
                   if (
@@ -164,7 +183,7 @@ function App() {
                     part.content &&
                     typeof part.content === "string"
                   ) {
-                    console.log("tool result", part);
+                    // console.log("tool result", part);
 
                     const toolResult = JSON.parse(part.content);
 
@@ -172,7 +191,7 @@ function App() {
                       // replace the tool result with the non-serialized version
                       part.content = toolResult.object;
 
-                      console.log("toolResult.object", toolResult.object);
+                      // console.log("toolResult.object", toolResult.object);
                     }
                   }
                 }
@@ -219,9 +238,21 @@ function App() {
         if (action === "mouse_move" && coordinate) {
           await moveMouse(coordinate[0], coordinate[1]);
         } else if (action === "left_click") {
-          await mouseClick("left");
+          console.log("-- Left click:", { coordinate });
+
+          if (coordinate) {
+            await mouseClick("left", coordinate[0], coordinate[1]);
+          } else {
+            await mouseClick("left");
+          }
         } else if (action === "right_click") {
-          await mouseClick("right");
+          console.log("-- Right click:", { coordinate });
+
+          if (coordinate) {
+            await mouseClick("right", coordinate[0], coordinate[1]);
+          } else {
+            await mouseClick("right");
+          }
         } else if (action === "screenshot") {
           const screenshot = await takeScreenshot();
 
@@ -276,63 +307,87 @@ function App() {
         tools: {
           computer: computerTool,
         },
-        async onFinish({ text, toolCalls, toolResults, finishReason, usage }) {
-          // implement your own storage logic:
-          console.log("onFinish", {
-            text,
-            toolCalls,
-            toolResults,
-            finishReason,
-            usage,
-          });
-        },
         maxSteps: 10,
         // experimental_continueSteps: true,
       });
 
       let text = "";
+      let augmentedText = "";
       let messageId = generateId();
+
+      const toolCalls: ToolInvocation[] = [];
+      const toolResults: ToolInvocation[] = [];
 
       for await (const delta of fullStream) {
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        console.log("delta", delta);
+        // console.log("delta", delta);
 
         if (delta.type === "text-delta") {
           let previousText = text;
           text += delta.textDelta;
+          augmentedText += delta.textDelta;
 
           if (previousText === "") {
-            addMessage({ role: "assistant", content: text, id: messageId });
+            addMessage({
+              role: "assistant",
+              content: text,
+              id: messageId,
+              augmentedText,
+            });
           } else {
             replaceLastMessage({
               role: "assistant",
               content: text,
               id: messageId,
+              augmentedText,
             });
           }
         } else {
           if (delta.type === "tool-call") {
+            toolCalls.push({
+              state: "call",
+              toolCallId: delta.toolCallId,
+              toolName: delta.toolName,
+              args: delta.args,
+            });
+
+            console.log("tool call", toolCalls[toolCalls.length - 1]);
+
             if (delta.toolName === "computer") {
-              text += `\n\n-----
+              augmentedText += `\n\n-----
 🖥️ Computer Tool Called
  - Action: ${delta.args.action}`;
 
               if (delta.args.text) {
-                text += `\n - Text: ${delta.args.text}`;
+                augmentedText += `\n - Text: ${delta.args.text}`;
               }
 
               if (delta.args.coordinate) {
-                text += `\n - Coordinate: ${JSON.stringify(
+                augmentedText += `\n - Coordinate: ${JSON.stringify(
                   delta.args.coordinate
                 )}`;
               }
 
-              text += `\n-----`;
+              augmentedText += `\n-----`;
             }
+          } else if (delta.type === "tool-result") {
+            toolResults.push({
+              state: "result",
+              toolCallId: delta.toolCallId,
+              toolName: delta.toolName,
+              args: delta.args,
+              result: delta.result,
+            });
+
+            console.log("tool result", toolResults[toolResults.length - 1]);
           }
         }
       }
+
+      updateLastMessage((message) => ({
+        toolInvocations: [...toolResults],
+      }));
     } catch (error) {
       console.error("Error submitting message", error);
     }
@@ -393,9 +448,10 @@ function App() {
                     <Bot />
                   </span>
                 )}
-                {message.content}
+                {message.augmentedText ?? message.content}
               </div>
             ))}
+            <div ref={messagesEndRef} />
           </div>
         </div>
         <div className="flex gap-2 sticky bottom-0 bg-gray-50 pt-2">

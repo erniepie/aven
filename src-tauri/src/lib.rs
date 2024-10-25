@@ -31,6 +31,7 @@ fn get_monitors() -> Result<Vec<MonitorData>, String> {
 
 #[tauri::command]
 fn take_screenshot(app_handle: tauri::AppHandle) -> Result<String, String> {
+    println!("-- Take screenshot");
     let enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
 
     let (cursor_x, cursor_y) = enigo.location().map_err(|e| e.to_string())?;
@@ -83,6 +84,8 @@ fn take_screenshot(app_handle: tauri::AppHandle) -> Result<String, String> {
 
 #[tauri::command]
 fn move_mouse(x: i32, y: i32) -> Result<(), String> {
+    println!("-- Move mouse: {:?}, {:?}", x, y);
+
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
 
     enigo
@@ -91,7 +94,9 @@ fn move_mouse(x: i32, y: i32) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn mouse_click(side: String) -> Result<(), String> {
+fn mouse_click(side: String, x: Option<i32>, y: Option<i32>) -> Result<(), String> {
+    println!("-- Mouse click: {:?}, {:?}", side, (x, y));
+
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
 
     let button = match side.as_str() {
@@ -100,6 +105,14 @@ fn mouse_click(side: String) -> Result<(), String> {
         _ => return Err("Invalid mouse button".to_string()),
     };
 
+    if let (Some(x), Some(y)) = (x, y) {
+        println!("-- Move: {:?}, {:?}", x, y);
+        enigo
+            .move_mouse(x, y, Coordinate::Abs)
+            .map_err(|e| e.to_string())?;
+    }
+
+    println!("-- Click: {:?}", button);
     enigo
         .button(button, Direction::Click)
         .map_err(|e| e.to_string())?;
@@ -109,6 +122,8 @@ fn mouse_click(side: String) -> Result<(), String> {
 
 #[tauri::command]
 fn get_cursor_position() -> Result<(i32, i32), String> {
+    println!("-- Get cursor position");
+
     let enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
     Ok(enigo.location().map_err(|e| e.to_string())?)
 }

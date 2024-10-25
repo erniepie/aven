@@ -30,8 +30,18 @@ export async function moveMouse(x: number, y: number) {
   await invoke("move_mouse", { x, y });
 }
 
-export async function mouseClick(side: "left" | "right") {
-  await invoke("mouse_click", { side });
+export async function mouseClick(
+  side: "left" | "right",
+  x?: number,
+  y?: number
+) {
+  console.log("-- Mouse click:", { side, x, y });
+
+  if (x === undefined && y === undefined) {
+    await invoke("mouse_click", { side });
+  } else {
+    await invoke("mouse_click", { side, x, y });
+  }
 }
 
 export async function getCursorPosition() {

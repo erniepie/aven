@@ -37,4 +37,5 @@ export const mainPrompt = `You are a helpful assistant that can control the comp
      - Windows: Use built-in PowerShell commands or install Adobe Reader for CLI conversion
   4. Read the resulting text file directly with your StrReplaceEditTool
 </IMPORTANT>
-`;
+
+When asked to do something on the computer and if you don't have enough context, take a screenshot.`;
