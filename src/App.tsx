@@ -2,6 +2,12 @@ import { useState, useEffect } from "react";
 import { Message } from "ai/react";
 
 import { fetch } from "@tauri-apps/plugin-http";
+import {
+  open,
+  BaseDirectory,
+  writeFile,
+  readFile,
+} from "@tauri-apps/plugin-fs";
 
 import "./App.css";
 import {
@@ -12,11 +18,29 @@ import {
 } from "./store";
 import { FaEdit, FaTrash } from "react-icons/fa";
 import { createAnthropic } from "@ai-sdk/anthropic";
-import { convertToCoreMessages, generateId, streamText } from "ai";
+import {
+  convertToCoreMessages,
+  generateId,
+  streamText,
+  ToolContent,
+  ToolResultPart,
+} from "ai";
 import { anthropicTools } from "./lib/anthropic-tools";
-import { getMonitors } from "./computer";
+import {
+  getCursorPosition,
+  getMonitors,
+  mouseClick,
+  moveMouse,
+  takeScreenshot,
+} from "./computer";
 import { Button } from "./components/ui/button";
 import { Textarea } from "./components/ui/textarea";
+import { mainPrompt } from "./prompts";
+
+type ToolObjectResponseWorkaround = {
+  __type__: "object-response";
+  object: unknown;
+};
 
 function ClaudeAPIKey() {
   const [claudeToken, setClaudeToken] = useState<string>("");
@@ -111,7 +135,77 @@ function App() {
       headers: {
         "anthropic-dangerous-direct-browser-access": "true",
       },
-      fetch,
+      fetch: async (input, init) => {
+        console.log("fetch", input, init);
+
+        let newInit = {
+          ...init,
+        };
+
+        /**
+         * Workaround for the AI SDK serialization of the tool responses
+         */
+        if (
+          input === "https://api.anthropic.com/v1/messages" &&
+          init?.method === "POST" &&
+          init?.body
+        ) {
+          const deserializedBody = JSON.parse(String(init?.body));
+
+          console.log("deserializedBody");
+
+          if (
+            deserializedBody.messages &&
+            deserializedBody.messages.length > 0
+          ) {
+            console.log("deserializedBody.messages");
+
+            for (const message of deserializedBody.messages) {
+              if (
+                message.role === "user" &&
+                Array.isArray(message.content) &&
+                message.content.length > 0
+              ) {
+                console.log("message.content");
+
+                for (const part of message.content) {
+                  if (
+                    part.type === "tool_result" &&
+                    part.content &&
+                    typeof part.content === "string"
+                  ) {
+                    console.log("tool result", part);
+
+                    const toolResult = JSON.parse(part.content);
+
+                    if (toolResult.__type__ === "object-response") {
+                      // replace the tool result with the non-serialized version
+                      part.content = toolResult.object;
+
+                      console.log("toolResult.object", toolResult.object);
+                    }
+                  }
+                }
+              }
+            }
+
+            newInit.body = JSON.stringify(deserializedBody);
+          }
+        }
+
+        // append request to file
+        const request = { input, init: newInit };
+        await writeFile(
+          "./requests.json",
+          new TextEncoder().encode(JSON.stringify(request) + "\n\n\n"),
+          {
+            append: true,
+            baseDir: BaseDirectory.AppData,
+          }
+        );
+
+        return fetch(input, newInit);
+      },
     });
 
     const primaryMonitor = monitors.find((m) => m.is_primary);
@@ -123,46 +217,113 @@ function App() {
       execute: async ({ action, coordinate, text }) => {
         // Implement your computer control logic here
         // Return the result of the action
-        console.log(action, coordinate, text);
+        console.log("Computer tool action:", { action, coordinate, text });
+
+        // | "key"
+        // | "type"
+        // | "left_click_drag"
+        // | "middle_click"
+        // | "double_click"
+        // | "cursor_position";
+
+        if (action === "mouse_move" && coordinate) {
+          await moveMouse(coordinate[0], coordinate[1]);
+        } else if (action === "left_click") {
+          await mouseClick("left");
+        } else if (action === "right_click") {
+          await mouseClick("right");
+        } else if (action === "screenshot") {
+          const screenshot = await takeScreenshot();
+
+          const screenshotBytes = await readFile(screenshot.absoluteFilePath);
+
+          const base64 = await arrayBufferToBase64(screenshotBytes);
+
+          const base64WithDataUrl = "data:image/png;base64," + base64;
+
+          await writeFile(
+            "./base64.txt",
+            new TextEncoder().encode(base64WithDataUrl),
+            {
+              baseDir: BaseDirectory.AppData,
+            }
+          );
+
+          // Tool result with images: https://docs.anthropic.com/en/docs/build-with-claude/tool-use#example-of-tool-result-with-images
+          // it goes with a workaround for the AI SDK serialization of the tool responses
+          return {
+            __type__: "object-response",
+            object: [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: "image/png",
+                  data: base64,
+                },
+              },
+            ],
+          } satisfies ToolObjectResponseWorkaround;
+        } else if (action === "cursor_position") {
+          const position = await getCursorPosition();
+          return position;
+        }
       },
     });
 
-    const { textStream } = await streamText({
-      model: anthropic("claude-3-5-sonnet-20241022"),
-      messages: convertToCoreMessages([
-        {
-          role: "user",
-          content: "You are a helpful assistant that can control the computer.",
+    try {
+      const { fullStream } = await streamText({
+        model: anthropic("claude-3-5-sonnet-20241022"),
+        maxTokens: 8192,
+        temperature: 0.5,
+        system: mainPrompt,
+        messages: convertToCoreMessages([
+          // send the last 3 messages
+          ...newMessages.slice(-3),
+        ]),
+        tools: {
+          computer: computerTool,
         },
-        ...newMessages,
-      ]),
-      tools: {
-        computer: computerTool,
-      },
-    });
+        async onFinish({ text, toolCalls, toolResults, finishReason, usage }) {
+          // implement your own storage logic:
+          console.log("onFinish", {
+            text,
+            toolCalls,
+            toolResults,
+            finishReason,
+            usage,
+          });
+        },
+        maxSteps: 10,
+        // experimental_continueSteps: true,
+      });
 
-    let text = "";
-    const messageId = generateId();
+      let text = "";
+      const messageId = generateId();
 
-    setMessages((prevMessages) => [
-      ...prevMessages,
-      { role: "assistant", content: text, id: messageId },
-    ]);
-
-    for await (const textPart of textStream) {
-      text += textPart;
-
-      // update the last message
       setMessages((prevMessages) => [
-        ...prevMessages.slice(0, -1),
+        ...prevMessages,
         { role: "assistant", content: text, id: messageId },
       ]);
-    }
 
-    setMessages((prevMessages) => {
-      saveMessages(prevMessages);
-      return prevMessages;
-    });
+      for await (const delta of fullStream) {
+        console.log("delta", delta);
+        // text += textPart;
+
+        // update the last message
+        // setMessages((prevMessages) => [
+        //   ...prevMessages.slice(0, -1),
+        //   { role: "assistant", content: text, id: messageId },
+        // ]);
+      }
+
+      // setMessages((prevMessages) => {
+      //   saveMessages(prevMessages);
+      //   return prevMessages;
+      // });
+    } catch (error) {
+      console.error("Error submitting message", error);
+    }
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -234,3 +395,22 @@ function App() {
 }
 
 export default App;
+
+async function arrayBufferToBase64(buffer: ArrayBuffer): Promise<string> {
+  const blob = new Blob([buffer], {
+    type: "application/octet-binary",
+  });
+
+  return new Promise<string>((resolve) => {
+    const reader = new FileReader();
+    reader.onload = function (evt) {
+      const dataurl = evt.target?.result;
+      if (typeof dataurl === "string") {
+        resolve(dataurl.substring(dataurl.indexOf(",") + 1));
+      } else {
+        resolve("");
+      }
+    };
+    reader.readAsDataURL(blob);
+  });
+}

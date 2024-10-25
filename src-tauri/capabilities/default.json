@@ -7,10 +7,28 @@
     "core:default",
     "shell:allow-open",
     "store:default",
-    "fs:default",
+    "fs:scope-appdata-recursive",
+    "fs:scope-document-recursive",
+    "fs:scope-download-recursive",
+    "fs:scope-desktop-recursive",
+    "fs:allow-app-read",
+    "fs:allow-app-write",
+    "fs:allow-app-read-recursive",
+    "fs:allow-app-write-recursive",
+    "fs:allow-appcache-read",
+    "fs:allow-appcache-write",
+    "fs:allow-appcache-read-recursive",
+    "fs:allow-appcache-write-recursive",
+    "fs:allow-appconfig-read",
+    "fs:allow-appconfig-write",
     {
       "identifier": "http:default",
-      "allow": [{ "url": "https://api.anthropic.com" }]
-    }
+      "allow": [
+        {
+          "url": "https://api.anthropic.com"
+        }
+      ]
+    },
+    "os:default"
   ]
 }

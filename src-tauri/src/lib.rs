@@ -1,6 +1,8 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
-use enigo::{Coordinate, Enigo, Mouse, Settings};
+use caesium::compress;
+use caesium::parameters::CSParameters;
+use enigo::{Button, Coordinate, Direction, Enigo, Mouse, Settings};
 use tauri::Manager;
 use xcap::Monitor;
 
@@ -58,7 +60,25 @@ fn take_screenshot(app_handle: tauri::AppHandle) -> Result<String, String> {
     screenshot.save(&path).map_err(|e| e.to_string())?;
     println!("-- Save: {:?}", now.elapsed());
 
-    Ok(String::from("./screenshots/screenshot.png"))
+    let now = std::time::Instant::now();
+    let dest_dir = screenshots_dir.join("screenshot_compressed.png");
+
+    let mut parameters = CSParameters::new();
+    parameters.keep_metadata = true;
+    parameters.png.quality = 80;
+    parameters.png.optimization_level = 3;
+    parameters.png.force_zopfli = false;
+
+    compress(
+        path.to_str().unwrap().to_string(),
+        dest_dir.to_str().unwrap().to_string(),
+        &parameters,
+    )
+    .map_err(|e| e.to_string())?;
+
+    println!("-- Compress: {:?}", now.elapsed());
+
+    Ok(String::from("./screenshots/screenshot_compressed.png"))
 }
 
 #[tauri::command]
@@ -70,9 +90,33 @@ fn move_mouse(x: i32, y: i32) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn mouse_click(side: String) -> Result<(), String> {
+    let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
+
+    let button = match side.as_str() {
+        "left" => Button::Left,
+        "right" => Button::Right,
+        _ => return Err("Invalid mouse button".to_string()),
+    };
+
+    enigo
+        .button(button, Direction::Click)
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn get_cursor_position() -> Result<(i32, i32), String> {
+    let enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
+    Ok(enigo.location().map_err(|e| e.to_string())?)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_store::Builder::new().build())
@@ -80,7 +124,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_monitors,
             take_screenshot,
-            move_mouse
+            move_mouse,
+            mouse_click,
+            get_cursor_position
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

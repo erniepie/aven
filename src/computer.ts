@@ -11,7 +11,10 @@ export async function getMonitors(): Promise<
   return result;
 }
 
-export async function takeScreenshot(): Promise<string> {
+export async function takeScreenshot(): Promise<{
+  assetUrl: string;
+  absoluteFilePath: string;
+}> {
   console.time("take_screenshot");
   const filePath = await invoke<string>("take_screenshot");
   console.timeEnd("take_screenshot");
@@ -20,9 +23,18 @@ export async function takeScreenshot(): Promise<string> {
   const absoluteFilePath = await join(appDataDirPath, filePath);
   const assetUrl = convertFileSrc(absoluteFilePath);
 
-  return assetUrl;
+  return { assetUrl, absoluteFilePath };
 }
 
 export async function moveMouse(x: number, y: number) {
   await invoke("move_mouse", { x, y });
+}
+
+export async function mouseClick(side: "left" | "right") {
+  await invoke("mouse_click", { side });
+}
+
+export async function getCursorPosition() {
+  const result = await invoke<{ x: number; y: number }>("get_cursor_position");
+  return result;
 }
