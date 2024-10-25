@@ -1,30 +1,16 @@
 import { useState, useEffect } from "react";
-import { Message } from "ai/react";
 
 import { fetch } from "@tauri-apps/plugin-http";
-import {
-  open,
-  BaseDirectory,
-  writeFile,
-  readFile,
-} from "@tauri-apps/plugin-fs";
+import { BaseDirectory, writeFile, readFile } from "@tauri-apps/plugin-fs";
 
 import "./App.css";
-import {
-  saveClaudeToken,
-  getClaudeToken,
-  getMessages,
-  saveMessages,
-} from "./store";
+import { saveClaudeToken, getClaudeToken } from "./store";
 import { FaEdit, FaTrash } from "react-icons/fa";
+import { Bot } from "lucide-react";
 import { createAnthropic } from "@ai-sdk/anthropic";
-import {
-  convertToCoreMessages,
-  generateId,
-  streamText,
-  ToolContent,
-  ToolResultPart,
-} from "ai";
+import { convertToCoreMessages, generateId, streamText } from "ai";
+import { Message } from "ai/react";
+
 import { anthropicTools } from "./lib/anthropic-tools";
 import {
   getCursorPosition,
@@ -36,6 +22,8 @@ import {
 import { Button } from "./components/ui/button";
 import { Textarea } from "./components/ui/textarea";
 import { mainPrompt } from "./prompts";
+import { useGlobalStore } from "./globalStore";
+import { cn } from "./lib/utils";
 
 type ToolObjectResponseWorkaround = {
   __type__: "object-response";
@@ -112,15 +100,17 @@ function App() {
     Array<{ id: string; is_primary: boolean; width: number; height: number }>
   >([]);
 
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { messages, setMessages, addMessage, replaceLastMessage } =
+    useGlobalStore();
   const [inputMessage, setInputMessage] = useState<string>("");
 
   useEffect(() => {
     getMonitors().then(setMonitors);
-    getMessages().then(setMessages);
   }, []);
 
   async function submitMessage(message: string) {
+    setInputMessage("");
+
     const newMessages = [
       ...messages,
       { role: "user", content: message, id: generateId() },
@@ -275,11 +265,13 @@ function App() {
       const { fullStream } = await streamText({
         model: anthropic("claude-3-5-sonnet-20241022"),
         maxTokens: 8192,
-        temperature: 0.5,
+        temperature: 0,
         system: mainPrompt,
         messages: convertToCoreMessages([
           // send the last 3 messages
-          ...newMessages.slice(-3),
+          // ...newMessages.slice(-3),
+
+          ...newMessages,
         ]),
         tools: {
           computer: computerTool,
@@ -299,28 +291,48 @@ function App() {
       });
 
       let text = "";
-      const messageId = generateId();
-
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        { role: "assistant", content: text, id: messageId },
-      ]);
+      let messageId = generateId();
 
       for await (const delta of fullStream) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
         console.log("delta", delta);
-        // text += textPart;
 
-        // update the last message
-        // setMessages((prevMessages) => [
-        //   ...prevMessages.slice(0, -1),
-        //   { role: "assistant", content: text, id: messageId },
-        // ]);
+        if (delta.type === "text-delta") {
+          let previousText = text;
+          text += delta.textDelta;
+
+          if (previousText === "") {
+            addMessage({ role: "assistant", content: text, id: messageId });
+          } else {
+            replaceLastMessage({
+              role: "assistant",
+              content: text,
+              id: messageId,
+            });
+          }
+        } else {
+          if (delta.type === "tool-call") {
+            if (delta.toolName === "computer") {
+              text += `\n\n-----
+🖥️ Computer Tool Called
+ - Action: ${delta.args.action}`;
+
+              if (delta.args.text) {
+                text += `\n - Text: ${delta.args.text}`;
+              }
+
+              if (delta.args.coordinate) {
+                text += `\n - Coordinate: ${JSON.stringify(
+                  delta.args.coordinate
+                )}`;
+              }
+
+              text += `\n-----`;
+            }
+          }
+        }
       }
-
-      // setMessages((prevMessages) => {
-      //   saveMessages(prevMessages);
-      //   return prevMessages;
-      // });
     } catch (error) {
       console.error("Error submitting message", error);
     }
@@ -329,13 +341,13 @@ function App() {
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      submitMessage(inputMessage);
       setInputMessage("");
+
+      submitMessage(inputMessage);
     }
   }
 
   async function clearMessages() {
-    await saveMessages([]);
     setMessages([]);
   }
 
@@ -347,9 +359,9 @@ function App() {
 
       <ClaudeAPIKey />
 
-      <div className="flex flex-col flex-1 gap-4 w-full max-w-2xl mx-auto">
-        <div className="flex flex-col gap-2 flex-1">
-          <div className="flex justify-end">
+      <div className="flex flex-col h-[calc(100vh-12rem)] w-full max-w-2xl mx-auto">
+        <div className="flex flex-col h-full">
+          <div className="flex justify-end mb-2">
             <Button
               onClick={clearMessages}
               variant="ghost"
@@ -359,27 +371,34 @@ function App() {
               Clear
             </Button>
           </div>
-          <div className="flex-1 overflow-y-auto space-y-2 p-4 bg-white rounded shadow flex flex-col">
+          <div className="flex-1 overflow-y-auto space-y-2 p-4 bg-white rounded shadow flex flex-col mb-4">
             {messages.map((message, index) => (
               <div
                 key={index}
-                className={`py-2 px-4 rounded-lg whitespace-pre-wrap ${
-                  message.role === "assistant" ? "bg-blue-100" : "bg-gray-200"
-                }`}
+                className={cn(
+                  "py-2 px-4 rounded-2xl whitespace-pre-wrap flex gap-3",
+                  {
+                    "bg-gray-200": message.role !== "assistant",
+                    "pt-4": message.role === "assistant",
+                  }
+                )}
                 style={{
                   alignSelf:
                     message.role === "assistant" ? "flex-start" : "flex-end",
-                  textAlign: message.role === "assistant" ? "left" : "right",
                   maxWidth: "70%",
                 }}
               >
-                <span className="font-semibold">{message.role}:</span>{" "}
+                {message.role === "assistant" && (
+                  <span className="text-lg text-blue-700 font-semibold rounded-full bg-blue-100 h-fit p-2 w-fit flex items-center justify-center">
+                    <Bot />
+                  </span>
+                )}
                 {message.content}
               </div>
             ))}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 sticky bottom-0 bg-gray-50 pt-2">
           <Textarea
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
