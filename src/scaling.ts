@@ -75,6 +75,10 @@ export function scaleCoordinates({
   const xScalingFactor = closestDimension.width / screenDimensions.width;
   const yScalingFactor = closestDimension.height / screenDimensions.height;
 
+  console.log("✅ closestDimension", closestDimension);
+  console.log("✅ xScalingFactor", xScalingFactor);
+  console.log("✅ yScalingFactor", yScalingFactor);
+
   if (source === ScalingSource.API) {
     // Scale up from target resolution to actual screen size
     return [Math.round(x / xScalingFactor), Math.round(y / yScalingFactor)];

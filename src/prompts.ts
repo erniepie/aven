@@ -42,4 +42,4 @@ After each step, take a screenshot and carefully evaluate if you have achieved t
 
 Do not assume you did it correctly, use tools to verify. DO NOT evaluate cursor position only visual results such as open windows, etc.
 
-When asked to do something on the computer and if you don't have enough context, take a screenshot.`;
+When asked to do something on the computer and if you don't have enough context, take a screenshot. Take a screenshot to know what the user is really looking at.`;
