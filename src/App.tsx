@@ -29,6 +29,7 @@ import { Textarea } from "./components/ui/textarea";
 import { mainPrompt } from "./prompts";
 import { useGlobalStore } from "./globalStore";
 import { cn } from "./lib/utils";
+import { scaleCoordinates, ScalingSource } from "./scaling";
 
 type ToolObjectResponseWorkaround = {
   __type__: "object-response";
@@ -143,6 +144,7 @@ function App() {
       apiKey: claudeAPIKey,
       headers: {
         "anthropic-dangerous-direct-browser-access": "true",
+        "anthropic-beta": "computer-use-2024-10-22",
       },
       fetch: async (input, init) => {
         console.log("fetch", input, init);
@@ -204,14 +206,14 @@ function App() {
 
         // append request to file
         const request = { input, init: newInit };
-        await writeFile(
-          "./requests.json",
-          new TextEncoder().encode(JSON.stringify(request) + "\n\n\n"),
-          {
-            append: true,
-            baseDir: BaseDirectory.AppData,
-          }
-        );
+        // await writeFile(
+        //   "./requests.json",
+        //   new TextEncoder().encode(JSON.stringify(request) + "\n\n\n"),
+        //   {
+        //     append: true,
+        //     baseDir: BaseDirectory.AppData,
+        //   }
+        // );
 
         return fetch(input, newInit);
       },
@@ -219,24 +221,36 @@ function App() {
 
     const primaryMonitor = monitors.find((m) => m.is_primary);
 
+    console.log("primaryMonitor", primaryMonitor);
+
     const computerTool = anthropicTools.computer_20241022({
       displayWidthPx: primaryMonitor?.width ?? 1920,
       displayHeightPx: primaryMonitor?.height ?? 1080,
-      displayNumber: 0, // Optional, for X11 environments
       execute: async ({ action, coordinate, text }) => {
         // Implement your computer control logic here
         // Return the result of the action
         console.log("Computer tool action:", { action, coordinate, text });
 
-        // | "key"
-        // | "type"
-        // | "left_click_drag"
-        // | "middle_click"
-        // | "double_click"
-        // | "cursor_position";
+        // TODO: implement this:
+        // - "key"
+        // - "type"
+        // - "left_click_drag"
+        // - "middle_click"
+        // - "double_click"
+        // - "cursor_position";
 
         if (action === "mouse_move" && coordinate) {
-          await moveMouse(coordinate[0], coordinate[1]);
+          const scaledCoordinates = scaleCoordinates({
+            source: ScalingSource.API,
+            screenDimensions: {
+              width: primaryMonitor?.width ?? 1920,
+              height: primaryMonitor?.height ?? 1080,
+            },
+            x: coordinate[0],
+            y: coordinate[1],
+          });
+
+          await moveMouse(scaledCoordinates[0], scaledCoordinates[1]);
         } else if (action === "left_click") {
           console.log("-- Left click:", { coordinate });
 
@@ -249,12 +263,31 @@ function App() {
           console.log("-- Right click:", { coordinate });
 
           if (coordinate) {
-            await mouseClick("right", coordinate[0], coordinate[1]);
+            const scaledCoordinates = scaleCoordinates({
+              source: ScalingSource.API,
+              screenDimensions: {
+                width: primaryMonitor?.width ?? 1920,
+                height: primaryMonitor?.height ?? 1080,
+              },
+              x: coordinate[0],
+              y: coordinate[1],
+            });
+
+            await mouseClick(
+              "right",
+              scaledCoordinates[0],
+              scaledCoordinates[1]
+            );
           } else {
             await mouseClick("right");
           }
         } else if (action === "screenshot") {
-          const screenshot = await takeScreenshot();
+          console.log("-- Screenshot");
+
+          const screenshot = await takeScreenshot({
+            resizeX: 1024,
+            resizeY: 768,
+          });
 
           const screenshotBytes = await readFile(screenshot.absoluteFilePath);
 
@@ -308,7 +341,7 @@ function App() {
           computer: computerTool,
         },
         maxSteps: 10,
-        // experimental_continueSteps: true,
+        experimental_continueSteps: true,
       });
 
       let text = "";
@@ -382,6 +415,13 @@ function App() {
 
             console.log("tool result", toolResults[toolResults.length - 1]);
           }
+
+          replaceLastMessage({
+            role: "assistant",
+            content: text,
+            id: messageId,
+            augmentedText,
+          });
         }
       }
 
@@ -413,9 +453,11 @@ function App() {
       </header>
 
       <ClaudeAPIKey />
-
-      <div className="flex flex-col h-[calc(100vh-12rem)] w-full max-w-2xl mx-auto">
-        <div className="flex flex-col h-full">
+      <div className="flex flex-col w-full max-w-2xl mx-auto">
+        <div
+          className="flex flex-col"
+          style={{ height: "calc(100vh - 12rem)" }}
+        >
           <div className="flex justify-end mb-2">
             <Button
               onClick={clearMessages}
@@ -426,7 +468,10 @@ function App() {
               Clear
             </Button>
           </div>
-          <div className="flex-1 overflow-y-auto space-y-2 p-4 bg-white rounded shadow flex flex-col mb-4">
+          <div
+            className="flex-1 overflow-y-auto space-y-2 p-4 bg-white rounded shadow flex flex-col mb-4"
+            style={{ minHeight: 0 }}
+          >
             {messages.map((message, index) => (
               <div
                 key={index}

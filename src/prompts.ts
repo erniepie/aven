@@ -38,4 +38,6 @@ export const mainPrompt = `You are a helpful assistant that can control the comp
   4. Read the resulting text file directly with your StrReplaceEditTool
 </IMPORTANT>
 
+After each step, take a screenshot and carefully evaluate if you have achieved the right outcome. Explicitly show your thinking: "I have evaluated step X..." If not correct, try again. Only when you confirm a step was executed correctly should you move on to the next one.
+
 When asked to do something on the computer and if you don't have enough context, take a screenshot.`;

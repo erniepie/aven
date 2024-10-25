@@ -30,5 +30,4 @@ tauri-plugin-store = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-http = "2"
 tauri-plugin-os = "2"
-libcaesium = "0.17.0"
 

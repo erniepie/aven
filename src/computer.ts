@@ -11,12 +11,21 @@ export async function getMonitors(): Promise<
   return result;
 }
 
-export async function takeScreenshot(): Promise<{
+export async function takeScreenshot({
+  resizeX,
+  resizeY,
+}: {
+  resizeX: number;
+  resizeY: number;
+}): Promise<{
   assetUrl: string;
   absoluteFilePath: string;
 }> {
   console.time("take_screenshot");
-  const filePath = await invoke<string>("take_screenshot");
+  const filePath = await invoke<string>("take_screenshot", {
+    resizeX,
+    resizeY,
+  });
   console.timeEnd("take_screenshot");
 
   const appDataDirPath = await appDataDir();

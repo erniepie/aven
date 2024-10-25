@@ -1,8 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
-use caesium::compress;
-use caesium::parameters::CSParameters;
 use enigo::{Button, Coordinate, Direction, Enigo, Mouse, Settings};
+use image::{imageops::FilterType, ImageReader};
 use tauri::Manager;
 use xcap::Monitor;
 
@@ -30,7 +29,11 @@ fn get_monitors() -> Result<Vec<MonitorData>, String> {
 }
 
 #[tauri::command]
-fn take_screenshot(app_handle: tauri::AppHandle) -> Result<String, String> {
+fn take_screenshot(
+    app_handle: tauri::AppHandle,
+    resize_x: u32,
+    resize_y: u32,
+) -> Result<String, String> {
     println!("-- Take screenshot");
     let enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
 
@@ -62,24 +65,14 @@ fn take_screenshot(app_handle: tauri::AppHandle) -> Result<String, String> {
     println!("-- Save: {:?}", now.elapsed());
 
     let now = std::time::Instant::now();
-    let dest_dir = screenshots_dir.join("screenshot_compressed.png");
+    let src_image = ImageReader::open(path).unwrap().decode().unwrap();
+    let dst_image = src_image.resize(resize_x, resize_y, FilterType::Lanczos3);
+    let resized_path = screenshots_dir.join("screenshot_resized.png");
+    dst_image.save(resized_path).unwrap();
+    println!("-- Resized to width: {}, height: {}", resize_x, resize_y);
+    println!("-- Resize: {:?}", now.elapsed());
 
-    let mut parameters = CSParameters::new();
-    parameters.keep_metadata = true;
-    parameters.png.quality = 80;
-    parameters.png.optimization_level = 3;
-    parameters.png.force_zopfli = false;
-
-    compress(
-        path.to_str().unwrap().to_string(),
-        dest_dir.to_str().unwrap().to_string(),
-        &parameters,
-    )
-    .map_err(|e| e.to_string())?;
-
-    println!("-- Compress: {:?}", now.elapsed());
-
-    Ok(String::from("./screenshots/screenshot_compressed.png"))
+    Ok(String::from("./screenshots/screenshot_resized.png"))
 }
 
 #[tauri::command]
