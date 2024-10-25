@@ -56,40 +56,26 @@ export function scaleCoordinates({
 }): [number, number] {
   // Calculate aspect ratio of current screen
   const ratio = screenDimensions.width / screenDimensions.height;
-  let targetDimension: Resolution | null = null;
 
-  console.log("ratio", ratio);
+  // Find closest matching target resolution
+  let closestDimension = Object.values(MAX_SCALING_TARGETS)[0];
+  let smallestDiff = Math.abs(
+    ratio - closestDimension.width / closestDimension.height
+  );
 
-  // Find closest matching target resolution with same aspect ratio
   for (const dimension of Object.values(MAX_SCALING_TARGETS)) {
     const dimensionRatio = dimension.width / dimension.height;
-    console.log("dimensionRatio", dimensionRatio);
-    if (Math.abs(dimensionRatio - ratio) < 0.02) {
-      // Allow 2% tolerance
-      if (dimension.width < screenDimensions.width) {
-        targetDimension = dimension;
-        break;
-      }
+    const diff = Math.abs(dimensionRatio - ratio);
+    if (diff < smallestDiff) {
+      closestDimension = dimension;
+      smallestDiff = diff;
     }
   }
 
-  console.log("targetDimension", targetDimension);
-
-  // If no matching target found, return original coordinates
-  if (!targetDimension) {
-    return [x, y];
-  }
-
-  const xScalingFactor = targetDimension.width / screenDimensions.width;
-  const yScalingFactor = targetDimension.height / screenDimensions.height;
+  const xScalingFactor = closestDimension.width / screenDimensions.width;
+  const yScalingFactor = closestDimension.height / screenDimensions.height;
 
   if (source === ScalingSource.API) {
-    // Validate coordinates are within bounds
-    if (x > screenDimensions.width || y > screenDimensions.height) {
-      throw new ToolError(
-        `Coordinates (${x}, ${y}) exceed screen bounds of ${screenDimensions.width}x${screenDimensions.height}`
-      );
-    }
     // Scale up from target resolution to actual screen size
     return [Math.round(x / xScalingFactor), Math.round(y / yScalingFactor)];
   }
