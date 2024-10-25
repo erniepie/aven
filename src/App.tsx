@@ -284,9 +284,19 @@ function App() {
         } else if (action === "screenshot") {
           console.log("-- Screenshot");
 
+          const scaledDimensionsForResize = scaleCoordinates({
+            source: ScalingSource.COMPUTER,
+            screenDimensions: {
+              width: primaryMonitor?.width ?? 1920,
+              height: primaryMonitor?.height ?? 1080,
+            },
+            x: primaryMonitor?.width ?? 1920,
+            y: primaryMonitor?.height ?? 1080,
+          });
+
           const screenshot = await takeScreenshot({
-            resizeX: 1024,
-            resizeY: 768,
+            resizeX: scaledDimensionsForResize[0],
+            resizeY: scaledDimensionsForResize[1],
           });
 
           const screenshotBytes = await readFile(screenshot.absoluteFilePath);
@@ -345,7 +355,6 @@ function App() {
       });
 
       let text = "";
-      let augmentedText = "";
       let messageId = generateId();
 
       const toolCalls: ToolInvocation[] = [];
@@ -359,21 +368,18 @@ function App() {
         if (delta.type === "text-delta") {
           let previousText = text;
           text += delta.textDelta;
-          augmentedText += delta.textDelta;
 
           if (previousText === "") {
             addMessage({
               role: "assistant",
               content: text,
               id: messageId,
-              augmentedText,
             });
           } else {
             replaceLastMessage({
               role: "assistant",
               content: text,
               id: messageId,
-              augmentedText,
             });
           }
         } else {
@@ -386,24 +392,6 @@ function App() {
             });
 
             console.log("tool call", toolCalls[toolCalls.length - 1]);
-
-            if (delta.toolName === "computer") {
-              augmentedText += `\n\n-----
-🖥️ Computer Tool Called
- - Action: ${delta.args.action}`;
-
-              if (delta.args.text) {
-                augmentedText += `\n - Text: ${delta.args.text}`;
-              }
-
-              if (delta.args.coordinate) {
-                augmentedText += `\n - Coordinate: ${JSON.stringify(
-                  delta.args.coordinate
-                )}`;
-              }
-
-              augmentedText += `\n-----`;
-            }
           } else if (delta.type === "tool-result") {
             toolResults.push({
               state: "result",
@@ -416,12 +404,12 @@ function App() {
             console.log("tool result", toolResults[toolResults.length - 1]);
           }
 
-          replaceLastMessage({
+          updateLastMessage((message) => ({
             role: "assistant",
             content: text,
             id: messageId,
-            augmentedText,
-          });
+            toolInvocations: [...toolResults],
+          }));
         }
       }
 
@@ -476,7 +464,7 @@ function App() {
               <div
                 key={index}
                 className={cn(
-                  "py-2 px-4 rounded-2xl whitespace-pre-wrap flex gap-3",
+                  "py-2 px-4 rounded-2xl whitespace-pre-wrap flex flex-col gap-4",
                   {
                     "bg-gray-200": message.role !== "assistant",
                     "pt-4": message.role === "assistant",
@@ -488,12 +476,45 @@ function App() {
                   maxWidth: "70%",
                 }}
               >
-                {message.role === "assistant" && (
-                  <span className="text-lg text-blue-700 font-semibold rounded-full bg-blue-100 h-fit p-2 w-fit flex items-center justify-center">
-                    <Bot />
-                  </span>
-                )}
-                {message.augmentedText ?? message.content}
+                <div className="flex gap-4">
+                  {message.role === "assistant" && (
+                    <span className="text-lg text-blue-700 font-semibold rounded-full bg-blue-100 h-fit p-2 w-fit flex items-center justify-center">
+                      <Bot />
+                    </span>
+                  )}
+                  {message.content}
+                </div>
+                <div className="flex items-center gap-2">
+                  {message.toolInvocations
+                    ?.filter(
+                      (toolInvocation) =>
+                        toolInvocation.state === "result" &&
+                        toolInvocation.toolName === "computer"
+                    )
+                    .map((toolInvocation) => (
+                      <div
+                        key={toolInvocation.toolCallId}
+                        className="text-xs font-medium px-4 py-2 rounded bg-gray-100 text-gray-700 border border-gray-200 shadow-sm transition-colors h-full flex flex-col gap-1"
+                      >
+                        <div>💻 Computer</div>
+                        <div>
+                          <b>Action:</b> {toolInvocation.args.action}
+                        </div>
+                        {toolInvocation.args.coordinate && (
+                          <div>
+                            <b>Coordinate:</b> x:{" "}
+                            {toolInvocation.args.coordinate[0]}, y:{" "}
+                            {toolInvocation.args.coordinate[1]}
+                          </div>
+                        )}
+                        {toolInvocation.args.text && (
+                          <div>
+                            <b>Text:</b> {toolInvocation.args.text}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                </div>
               </div>
             ))}
             <div ref={messagesEndRef} />
