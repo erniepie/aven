@@ -1,20 +1,26 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
 
-export async function getMonitors(): Promise<
-  Array<{ id: string; is_primary: boolean; width: number; height: number }>
-> {
-  const result = await invoke<
-    Array<{ id: string; is_primary: boolean; width: number; height: number }>
-  >("get_monitors");
+export type Monitor = {
+  id: string;
+  name: string;
+  is_primary: boolean;
+  width: number;
+  height: number;
+};
+
+export async function getMonitors(): Promise<Array<Monitor>> {
+  const result = await invoke<Array<Monitor>>("get_monitors");
 
   return result;
 }
 
 export async function takeScreenshot({
+  monitorId,
   resizeX,
   resizeY,
 }: {
+  monitorId: string;
   resizeX: number;
   resizeY: number;
 }): Promise<{
@@ -23,6 +29,7 @@ export async function takeScreenshot({
 }> {
   console.time("take_screenshot");
   const filePath = await invoke<string>("take_screenshot", {
+    monitorId,
     resizeX,
     resizeY,
   });
@@ -35,11 +42,12 @@ export async function takeScreenshot({
   return { assetUrl, absoluteFilePath };
 }
 
-export async function moveMouse(x: number, y: number) {
-  await invoke("move_mouse", { x, y });
+export async function moveMouse(monitorId: string, x: number, y: number) {
+  await invoke("move_mouse", { monitorId, x, y });
 }
 
 export async function mouseClick(
+  monitorId: string,
   side: "left" | "right",
   x?: number,
   y?: number
@@ -47,13 +55,15 @@ export async function mouseClick(
   console.log("-- Mouse click:", { side, x, y });
 
   if (x === undefined && y === undefined) {
-    await invoke("mouse_click", { side });
+    await invoke("mouse_click", { monitorId, side });
   } else {
-    await invoke("mouse_click", { side, x, y });
+    await invoke("mouse_click", { monitorId, side, x, y });
   }
 }
 
-export async function getCursorPosition() {
-  const result = await invoke<{ x: number; y: number }>("get_cursor_position");
+export async function getCursorPosition(monitorId: string) {
+  const result = await invoke<{ x: number; y: number }>("get_cursor_position", {
+    monitorId,
+  });
   return result;
 }

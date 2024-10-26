@@ -9,6 +9,7 @@ use xcap::Monitor;
 struct MonitorData {
     id: String,
     is_primary: bool,
+    name: String,
     width: u32,
     height: u32,
 }
@@ -22,6 +23,7 @@ fn get_monitors() -> Result<Vec<MonitorData>, String> {
         .map(|m| MonitorData {
             id: m.id().to_string(),
             is_primary: m.is_primary(),
+            name: m.name().to_string(),
             width: m.width(),
             height: m.height(),
         })
@@ -31,6 +33,7 @@ fn get_monitors() -> Result<Vec<MonitorData>, String> {
 #[tauri::command]
 async fn take_screenshot(
     app_handle: tauri::AppHandle,
+    monitor_id: String,
     resize_x: u32,
     resize_y: u32,
 ) -> Result<String, String> {
@@ -44,9 +47,7 @@ async fn take_screenshot(
     .await
     .map_err(|e| e.to_string())??;
 
-    let now = std::time::Instant::now();
-    let monitor = Monitor::from_point(cursor_x, cursor_y).map_err(|e| e.to_string())?;
-    println!("-- Monitor: {:?}", now.elapsed());
+    let monitor = get_monitor_by_id(monitor_id)?;
 
     let now = std::time::Instant::now();
     let screenshot = monitor.capture_image().map_err(|e| e.to_string())?;
@@ -100,19 +101,28 @@ async fn take_screenshot(
 }
 
 #[tauri::command]
-fn move_mouse(x: i32, y: i32) -> Result<(), String> {
+fn move_mouse(monitor_id: String, x: i32, y: i32) -> Result<(), String> {
     println!("-- Move mouse: {:?}, {:?}", x, y);
+
+    let monitor = get_monitor_by_id(monitor_id)?;
 
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
 
     enigo
-        .move_mouse(x, y, Coordinate::Abs)
+        .move_mouse(monitor.x() + x, monitor.y() + y, Coordinate::Abs)
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn mouse_click(side: String, x: Option<i32>, y: Option<i32>) -> Result<(), String> {
+fn mouse_click(
+    monitor_id: String,
+    side: String,
+    x: Option<i32>,
+    y: Option<i32>,
+) -> Result<(), String> {
     println!("-- Mouse click: {:?}, {:?}", side, (x, y));
+
+    let monitor = get_monitor_by_id(monitor_id)?;
 
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
 
@@ -125,7 +135,7 @@ fn mouse_click(side: String, x: Option<i32>, y: Option<i32>) -> Result<(), Strin
     if let (Some(x), Some(y)) = (x, y) {
         println!("-- Move: {:?}, {:?}", x, y);
         enigo
-            .move_mouse(x, y, Coordinate::Abs)
+            .move_mouse(monitor.x() + x, monitor.y() + y, Coordinate::Abs)
             .map_err(|e| e.to_string())?;
     }
 
@@ -138,11 +148,17 @@ fn mouse_click(side: String, x: Option<i32>, y: Option<i32>) -> Result<(), Strin
 }
 
 #[tauri::command]
-fn get_cursor_position() -> Result<(i32, i32), String> {
+fn get_cursor_position(monitor_id: String) -> Result<(i32, i32), String> {
     println!("-- Get cursor position");
 
+    let monitor = get_monitor_by_id(monitor_id)?;
+
     let enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
-    Ok(enigo.location().map_err(|e| e.to_string())?)
+
+    Ok(enigo
+        .location()
+        .map(|(x, y)| (x + monitor.x(), y + monitor.y()))
+        .map_err(|e| e.to_string())?)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -162,4 +178,15 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+fn get_monitor_by_id(monitor_id: String) -> Result<Monitor, String> {
+    let monitors = Monitor::all().map_err(|e| e.to_string())?;
+    let monitor = monitors.iter().find(|m| m.id().to_string() == monitor_id);
+
+    if monitor.is_none() {
+        return Err("Monitor not found".to_string());
+    }
+
+    Ok(monitor.unwrap().clone())
 }

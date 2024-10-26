@@ -66,7 +66,7 @@ function ClaudeAPIKey() {
   }
 
   return (
-    <div className="absolute top-2 right-2 p-2 bg-white rounded shadow">
+    <div className="p-2 bg-white rounded shadow w-fit">
       <div className="flex gap-2 items-center">
         <h2 className="text-sm font-semibold">Claude API Key:</h2>
         {isEditingToken ? (
@@ -105,6 +105,7 @@ function App() {
   const [monitors, setMonitors] = useState<
     Array<{ id: string; is_primary: boolean; width: number; height: number }>
   >([]);
+  const [selectedMonitorId, setSelectedMonitorId] = useState<string>("");
   const [isAIWorking, setIsAIWorking] = useState(false);
 
   const {
@@ -122,7 +123,13 @@ function App() {
   };
 
   useEffect(() => {
-    getMonitors().then(setMonitors);
+    getMonitors().then((monitors) => {
+      setMonitors(monitors);
+      const primaryMonitor = monitors.find((m) => m.is_primary);
+      if (primaryMonitor) {
+        setSelectedMonitorId(primaryMonitor.id);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -221,14 +228,18 @@ function App() {
       },
     });
 
-    const primaryMonitor = monitors.find((m) => m.is_primary);
+    const selectedMonitor = monitors.find((m) => m.id === selectedMonitorId);
 
-    console.log("primaryMonitor", primaryMonitor);
+    console.log("selectedMonitor", selectedMonitor);
 
     const computerTool = anthropicTools.computer_20241022({
-      displayWidthPx: primaryMonitor?.width ?? 1920,
-      displayHeightPx: primaryMonitor?.height ?? 1080,
+      displayWidthPx: selectedMonitor?.width ?? 1920,
+      displayHeightPx: selectedMonitor?.height ?? 1080,
       execute: async ({ action, coordinate, text }) => {
+        if (!selectedMonitorId) {
+          return "No monitor selected";
+        }
+
         // Implement your computer control logic here
         // Return the result of the action
         console.log("Computer tool action:", { action, coordinate, text });
@@ -245,14 +256,18 @@ function App() {
           const scaledCoordinates = scaleCoordinates({
             source: ScalingSource.API,
             screenDimensions: {
-              width: primaryMonitor?.width ?? 1920,
-              height: primaryMonitor?.height ?? 1080,
+              width: selectedMonitor?.width ?? 1920,
+              height: selectedMonitor?.height ?? 1080,
             },
             x: coordinate[0],
             y: coordinate[1],
           });
 
-          await moveMouse(scaledCoordinates[0], scaledCoordinates[1]);
+          await moveMouse(
+            selectedMonitorId,
+            scaledCoordinates[0],
+            scaledCoordinates[1]
+          );
         } else if (action === "left_click") {
           console.log("-- Left click:", { coordinate });
 
@@ -260,20 +275,21 @@ function App() {
             const scaledCoordinates = scaleCoordinates({
               source: ScalingSource.API,
               screenDimensions: {
-                width: primaryMonitor?.width ?? 1920,
-                height: primaryMonitor?.height ?? 1080,
+                width: selectedMonitor?.width ?? 1920,
+                height: selectedMonitor?.height ?? 1080,
               },
               x: coordinate[0],
               y: coordinate[1],
             });
 
             await mouseClick(
+              selectedMonitorId,
               "left",
               scaledCoordinates[0],
               scaledCoordinates[1]
             );
           } else {
-            await mouseClick("left");
+            await mouseClick(selectedMonitorId, "left");
           }
         } else if (action === "right_click") {
           console.log("-- Right click:", { coordinate });
@@ -282,20 +298,21 @@ function App() {
             const scaledCoordinates = scaleCoordinates({
               source: ScalingSource.API,
               screenDimensions: {
-                width: primaryMonitor?.width ?? 1920,
-                height: primaryMonitor?.height ?? 1080,
+                width: selectedMonitor?.width ?? 1920,
+                height: selectedMonitor?.height ?? 1080,
               },
               x: coordinate[0],
               y: coordinate[1],
             });
 
             await mouseClick(
+              selectedMonitorId,
               "right",
               scaledCoordinates[0],
               scaledCoordinates[1]
             );
           } else {
-            await mouseClick("right");
+            await mouseClick(selectedMonitorId, "right");
           }
         } else if (action === "screenshot") {
           console.log("-- Screenshot");
@@ -303,14 +320,15 @@ function App() {
           const scaledDimensions = scaleCoordinates({
             source: ScalingSource.COMPUTER,
             screenDimensions: {
-              width: primaryMonitor?.width ?? 1920,
-              height: primaryMonitor?.height ?? 1080,
+              width: selectedMonitor?.width ?? 1920,
+              height: selectedMonitor?.height ?? 1080,
             },
-            x: primaryMonitor?.width ?? 1920,
-            y: primaryMonitor?.height ?? 1080,
+            x: selectedMonitor?.width ?? 1920,
+            y: selectedMonitor?.height ?? 1080,
           });
 
           const screenshot = await takeScreenshot({
+            monitorId: selectedMonitorId,
             resizeX: scaledDimensions[0],
             resizeY: scaledDimensions[1],
           });
@@ -345,7 +363,7 @@ function App() {
             ],
           } satisfies ToolObjectResponseWorkaround;
         } else if (action === "cursor_position") {
-          const position = await getCursorPosition();
+          const position = await getCursorPosition(selectedMonitorId);
           return position;
         }
       },
@@ -451,7 +469,6 @@ function App() {
   async function clearMessages() {
     setMessages([]);
   }
-
   return (
     <main className="min-h-screen flex flex-col p-8 bg-gray-50">
       <header className="w-full text-center mb-4">
@@ -459,12 +476,23 @@ function App() {
       </header>
 
       <ClaudeAPIKey />
-      <div className="flex flex-col w-full max-w-2xl mx-auto">
-        <div
-          className="flex flex-col"
-          style={{ height: "calc(100vh - 12rem)" }}
-        >
-          <div className="flex justify-end mb-2">
+      <div className="flex flex-col w-full max-w-2xl mx-auto h-[calc(100vh-16rem)]">
+        <div className="flex flex-col flex-1 min-h-0">
+          <div className="flex justify-between mb-2 items-center">
+            <select
+              value={selectedMonitorId}
+              onChange={(e) => setSelectedMonitorId(e.target.value)}
+              className="px-2 py-1 border rounded text-sm"
+            >
+              {monitors.map((monitor) => (
+                <option key={monitor.id} value={monitor.id}>
+                  {monitor.is_primary
+                    ? "Primary Monitor"
+                    : `Monitor ${monitor.id}`}{" "}
+                  ({monitor.width}x{monitor.height})
+                </option>
+              ))}
+            </select>
             <Button
               onClick={clearMessages}
               variant="ghost"
@@ -474,10 +502,7 @@ function App() {
               Clear
             </Button>
           </div>
-          <div
-            className="flex-1 overflow-y-auto space-y-2 p-4 bg-white rounded shadow flex flex-col mb-4"
-            style={{ minHeight: 0 }}
-          >
+          <div className="flex-1 overflow-y-auto space-y-2 p-4 bg-white rounded shadow flex flex-col mb-4 min-h-0">
             {messages.map((message, index) => (
               <div
                 key={index}
@@ -491,67 +516,70 @@ function App() {
                 style={{
                   alignSelf:
                     message.role === "assistant" ? "flex-start" : "flex-end",
-                  maxWidth: "70%",
+                  width: "70%",
                 }}
               >
                 <div className="flex gap-4">
                   {message.role === "assistant" && (
-                    <span className="text-lg text-blue-700 font-semibold rounded-full bg-blue-100 h-fit p-2 w-fit flex items-center justify-center">
+                    <span className="text-lg text-blue-700 font-semibold rounded-full bg-blue-100 h-8 w-8 flex items-center justify-center flex-shrink-0">
                       <Bot />
                     </span>
                   )}
                   {message.content}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex gap-2 flex-wrap">
                   {message.toolInvocations
                     ?.filter(
-                      (toolInvocation) =>
-                        toolInvocation.state === "result" &&
-                        toolInvocation.toolName === "computer"
+                      (toolInvocation) => toolInvocation.state === "result"
                     )
-                    .map((toolInvocation) => (
-                      <div
-                        key={toolInvocation.toolCallId}
-                        className="text-xs font-medium px-4 py-2 rounded bg-gray-100 text-gray-700 border border-gray-200 shadow-sm transition-colors h-full flex flex-col gap-1"
-                      >
-                        <div>💻 Computer</div>
-                        <div>
-                          <b>Action:</b> <br />
-                          {toolInvocation.args.action}
+                    .map((toolInvocation, idx) =>
+                      toolInvocation.toolName === "computer" ? (
+                        <div
+                          key={toolInvocation.toolCallId}
+                          className="text-xs font-medium px-4 py-2 rounded bg-gray-100 text-gray-700 border border-gray-200 shadow-sm transition-colors flex flex-col gap-1"
+                        >
+                          <div>💻 Computer #{idx + 1}</div>
+                          <div>
+                            <b>Action:</b> <br />
+                            {toolInvocation.args.action}
+                          </div>
+                          {toolInvocation.args.coordinate && (
+                            <div>
+                              <b>Coordinate:</b> <br />
+                              x: {toolInvocation.args.coordinate[0]}, y:{" "}
+                              {toolInvocation.args.coordinate[1]}
+                            </div>
+                          )}
+                          {toolInvocation.args.text && (
+                            <div>
+                              <b>Text:</b> <br />
+                              {toolInvocation.args.text}
+                            </div>
+                          )}
                         </div>
-                        {toolInvocation.args.coordinate && (
-                          <div>
-                            <b>Coordinate:</b> <br />
-                            x: {toolInvocation.args.coordinate[0]}, y:{" "}
-                            {toolInvocation.args.coordinate[1]}
-                          </div>
-                        )}
-                        {toolInvocation.args.text && (
-                          <div>
-                            <b>Text:</b> <br />
-                            {toolInvocation.args.text}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      ) : (
+                        <></>
+                      )
+                    )}
                 </div>
               </div>
             ))}
             <div ref={messagesEndRef} />
           </div>
         </div>
-        <div className="flex gap-2 sticky bottom-0 bg-gray-50 pt-2">
+        <div className="flex gap-2 bg-gray-50">
           <Textarea
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             placeholder="Type your message"
-            className="flex-1"
+            className="flex-1 min-h-[2.5rem] max-h-[10rem]"
             onKeyDown={handleKeyDown}
             disabled={isAIWorking}
           />
           <Button
             onClick={() => submitMessage(inputMessage)}
             disabled={isAIWorking}
+            className="h-10 px-4"
           >
             {isAIWorking ? "Thinking..." : "Send"}
           </Button>
