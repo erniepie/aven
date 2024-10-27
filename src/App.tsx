@@ -22,7 +22,9 @@ import {
   getMonitors,
   mouseClick,
   moveMouse,
+  pressKey,
   takeScreenshot,
+  typeText,
 } from "./computer";
 import { Button } from "./components/ui/button";
 import { Textarea } from "./components/ui/textarea";
@@ -365,6 +367,10 @@ function App() {
         } else if (action === "cursor_position") {
           const position = await getCursorPosition(selectedMonitorId);
           return position;
+        } else if (action === "type" && text) {
+          await typeText(text);
+        } else if (action === "key" && text) {
+          await pressKey(text);
         }
       },
     });

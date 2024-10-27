@@ -67,3 +67,11 @@ export async function getCursorPosition(monitorId: string) {
   });
   return result;
 }
+
+export async function typeText(text: string) {
+  await invoke("type_text", { text });
+}
+
+export async function pressKey(key: string) {
+  await invoke("press_key", { key });
+}
