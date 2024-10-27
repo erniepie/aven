@@ -46,6 +46,9 @@ export async function takeScreenshot({
 }
 
 export async function moveMouse(monitorId: string, x: number, y: number) {
+  // wait 2 seconds to ensure the screen is ready
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+
   await invoke("move_mouse", { monitorId, x, y });
 }
 
@@ -55,6 +58,9 @@ export async function mouseClick(
   x?: number,
   y?: number
 ) {
+  // wait 2 seconds to ensure the screen is ready
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+
   console.log("-- Mouse click:", { side, x, y });
 
   if (x === undefined && y === undefined) {
@@ -65,6 +71,9 @@ export async function mouseClick(
 }
 
 export async function getCursorPosition(monitorId: string) {
+  // wait 2 seconds to ensure the screen is ready
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+
   const result = await invoke<{ x: number; y: number }>("get_cursor_position", {
     monitorId,
   });
@@ -72,9 +81,15 @@ export async function getCursorPosition(monitorId: string) {
 }
 
 export async function typeText(text: string) {
+  // wait 2 seconds to ensure the screen is ready
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+
   await invoke("type_text", { text });
 }
 
 export async function pressKey(key: string) {
+  // wait 2 seconds to ensure the screen is ready
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+
   await invoke("press_key", { key });
 }
