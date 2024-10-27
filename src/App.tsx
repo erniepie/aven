@@ -482,7 +482,7 @@ function App() {
       </header>
 
       <ClaudeAPIKey />
-      <div className="flex flex-col w-full max-w-2xl mx-auto h-[calc(100vh-16rem)]">
+      <div className="flex flex-col w-full max-w-2xl mx-auto h-[calc(100vh-12rem)]">
         <div className="flex flex-col flex-1 min-h-0">
           <div className="flex justify-between mb-2 items-center">
             <select
