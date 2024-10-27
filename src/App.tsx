@@ -109,6 +109,7 @@ function App() {
   >([]);
   const [selectedMonitorId, setSelectedMonitorId] = useState<string>("");
   const [isAIWorking, setIsAIWorking] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const {
     messages,
@@ -139,8 +140,15 @@ function App() {
   }, [messages]);
 
   async function submitMessage(message: string) {
+    if (message === "") {
+      return;
+    }
+
     setInputMessage("");
     setIsAIWorking(true);
+
+    // Create new abort controller for this request
+    abortControllerRef.current = new AbortController();
 
     const newMessages = [
       ...messages,
@@ -162,6 +170,7 @@ function App() {
 
         let newInit = {
           ...init,
+          signal: abortControllerRef.current?.signal,
         };
 
         /**
@@ -216,7 +225,7 @@ function App() {
         }
 
         // append request to file
-        const request = { input, init: newInit };
+        // const request = { input, init: newInit };
         // await writeFile(
         //   "./requests.json",
         //   new TextEncoder().encode(JSON.stringify(request) + "\n\n\n"),
@@ -457,9 +466,19 @@ function App() {
         toolInvocations: [...toolResults],
       }));
     } catch (error) {
-      console.error("Error submitting message", error);
+      if (error instanceof Error && error.name === "AbortError") {
+        console.log("Generation stopped by user");
+        addMessage({
+          role: "assistant",
+          content: "[Generation stopped]",
+          id: generateId(),
+        });
+      } else {
+        console.error("Error submitting message", error);
+      }
     } finally {
       setIsAIWorking(false);
+      abortControllerRef.current = null;
     }
   }
 
@@ -469,6 +488,12 @@ function App() {
       setInputMessage("");
 
       submitMessage(inputMessage);
+    }
+  }
+
+  function stopGeneration() {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
   }
 
@@ -582,13 +607,22 @@ function App() {
             onKeyDown={handleKeyDown}
             disabled={isAIWorking}
           />
-          <Button
-            onClick={() => submitMessage(inputMessage)}
-            disabled={isAIWorking}
-            className="h-10 px-4"
-          >
-            {isAIWorking ? "Thinking..." : "Send"}
-          </Button>
+          {isAIWorking ? (
+            <Button
+              onClick={stopGeneration}
+              className="h-10 px-4 bg-red-500 hover:bg-red-600"
+            >
+              Stop
+            </Button>
+          ) : (
+            <Button
+              onClick={() => submitMessage(inputMessage)}
+              className="h-10 px-4"
+              disabled={inputMessage === ""}
+            >
+              Send
+            </Button>
+          )}
         </div>
       </div>
     </main>
