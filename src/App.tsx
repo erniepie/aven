@@ -122,7 +122,9 @@ function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "instant" });
+    }
   };
 
   useEffect(() => {
@@ -146,7 +148,6 @@ function App() {
 
     setInputMessage("");
     setIsAIWorking(true);
-
     // Create new abort controller for this request
     abortControllerRef.current = new AbortController();
 
@@ -399,7 +400,7 @@ function App() {
         tools: {
           computer: computerTool,
         },
-        maxSteps: 10,
+        maxSteps: 30,
         experimental_continueSteps: true,
       });
 
@@ -534,9 +535,9 @@ function App() {
             </Button>
           </div>
           <div className="flex-1 overflow-y-auto space-y-2 p-4 bg-white rounded shadow flex flex-col mb-4 min-h-0">
-            {messages.map((message, index) => (
+            {messages.map((message) => (
               <div
-                key={index}
+                key={message.id}
                 className={cn(
                   "py-2 px-4 rounded-2xl whitespace-pre-wrap flex flex-col gap-4",
                   {
@@ -547,7 +548,7 @@ function App() {
                 style={{
                   alignSelf:
                     message.role === "assistant" ? "flex-start" : "flex-end",
-                  width: "70%",
+                  width: "85%",
                 }}
               >
                 <div className="flex gap-4">
@@ -567,26 +568,18 @@ function App() {
                       toolInvocation.toolName === "computer" ? (
                         <div
                           key={toolInvocation.toolCallId}
-                          className="text-xs font-medium px-4 py-2 rounded bg-gray-100 text-gray-700 border border-gray-200 shadow-sm transition-colors flex flex-col gap-1"
+                          className="text-xs font-medium px-2 py-1 rounded bg-gray-100 text-gray-700 border border-gray-200 shadow-sm transition-colors flex flex-col gap-1"
                         >
                           <div>💻 Computer #{idx + 1}</div>
                           <div>
-                            <b>Action:</b> <br />
-                            {toolInvocation.args.action}
+                            <b>{toolInvocation.args.action}</b>{" "}
+                            {toolInvocation.args.coordinate && (
+                              <>
+                                {`(x: ${toolInvocation.args.coordinate[0]}, y: ${toolInvocation.args.coordinate[1]})`}
+                              </>
+                            )}
+                            {toolInvocation.args.text}
                           </div>
-                          {toolInvocation.args.coordinate && (
-                            <div>
-                              <b>Coordinate:</b> <br />
-                              x: {toolInvocation.args.coordinate[0]}, y:{" "}
-                              {toolInvocation.args.coordinate[1]}
-                            </div>
-                          )}
-                          {toolInvocation.args.text && (
-                            <div>
-                              <b>Text:</b> <br />
-                              {toolInvocation.args.text}
-                            </div>
-                          )}
                         </div>
                       ) : (
                         <></>
