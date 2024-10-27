@@ -27,6 +27,9 @@ export async function takeScreenshot({
   assetUrl: string;
   absoluteFilePath: string;
 }> {
+  // wait 2 seconds to ensure the screen is ready
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+
   console.time("take_screenshot");
   const filePath = await invoke<string>("take_screenshot", {
     monitorId,
