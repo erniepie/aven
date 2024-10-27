@@ -155,6 +155,8 @@ fn get_cursor_position(monitor_id: String) -> Result<(i32, i32), String> {
 
 #[tauri::command]
 fn type_text(text: String) -> Result<(), String> {
+    println!("-- Type text: {:?}", text);
+
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
 
     enigo.text(&text).map_err(|e| e.to_string())?;
@@ -164,6 +166,8 @@ fn type_text(text: String) -> Result<(), String> {
 
 #[tauri::command]
 fn press_key(key: String) -> Result<(), String> {
+    println!("-- Press key: {:?}", key);
+
     // key examples: "a", "Return", "alt+Tab", "ctrl+s", "Up", "KP_0" (for the numpad 0 key).
 
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
@@ -183,11 +187,11 @@ fn press_key(key: String) -> Result<(), String> {
         key_name = key;
     }
 
-    if let Some(special_key) = special_key {
-        let key = get_key_from_name(special_key)?;
+    if let Some(special_key) = &special_key {
+        let key = get_key_from_name(special_key.clone())?;
 
         enigo
-            .key(key, Direction::Click)
+            .key(key, Direction::Press)
             .map_err(|e| e.to_string())?;
     }
 
@@ -196,6 +200,14 @@ fn press_key(key: String) -> Result<(), String> {
     enigo
         .key(key, Direction::Click)
         .map_err(|e| e.to_string())?;
+
+    if let Some(special_key) = special_key {
+        let key = get_key_from_name(special_key)?;
+
+        enigo
+            .key(key, Direction::Release)
+            .map_err(|e| e.to_string())?;
+    }
 
     Ok(())
 }
