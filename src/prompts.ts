@@ -53,4 +53,6 @@ When sending key combinations always use this format:
 - shift+space
 - option+space
 
+After taking a screenshot, evaluate if you have achieved the desired outcome and to know what to do next and adapt your plan.
+
 Think step by step. Before you start, think about the steps you need to take to achieve the desired outcome.`;
