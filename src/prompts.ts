@@ -42,4 +42,15 @@ After each step, take a screenshot and carefully evaluate if you have achieved t
 
 Do not assume you did it correctly, use tools to verify. DO NOT evaluate cursor position only visual results such as open windows, etc.
 
-When asked to do something on the computer and if you don't have enough context, take a screenshot. Take a screenshot to know what the user is really looking at.`;
+For scrolling, first ensure you are in the correct position, then use "Page Up" or "Page Down" for large jumps, or arrow keys for small movements.
+
+When asked to do something on the computer and if you don't have enough context, take a screenshot. Take a screenshot to know what the user is really looking at.
+
+When sending key combinations always use this format:
+- command+space
+- alt-space
+- control+space
+- shift+space
+- option+space
+
+Think step by step. Before you start, think about the steps you need to take to achieve the desired outcome.`;
